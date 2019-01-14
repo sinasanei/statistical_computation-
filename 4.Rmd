@@ -1,0 +1,177 @@
+---
+title: '4'
+author: "Sina Sanei"
+date: "November 6, 2018"
+output:
+  pdf_document: default
+  html_document:
+    df_print: paged
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+```{r sim}
+set.seed(501)
+log_lik4= function (x,gam){ ##mu=3,gamma)
+  n = length(x)
+  if(!is.infinite((-sum(x)+ n*3)/gam - 2* sum(log(gam+exp(-x-3)))) & 
+     !is.nan((-sum(x)+ n*3)/gam - 2* sum(log(gam+exp(-x-3))))){
+  ll=(-sum(x)+ n*3)/gam - 2* sum(log(gam+exp(-x-3)))} else{ll=0}
+  return(-ll)
+}
+param = c(3, 1) # mu=3 , gamma = 1 
+n1=10
+n2=500
+gamma_1=rep(NA,100)
+gamma_2=rep(NA,100)
+gamma_3=rep(NA,100)
+gamma_4=rep(NA,100)
+for (i in 1:100){ # mle of gamma for n=10 and 500 
+  x1= rlogis(n1,3,1) #gamma=1
+  x2=rlogis(n2,3,1)#gamma=1
+  x3=rlogis(n1,3,10) #gamma=10
+  x4=rlogis(n2,3,10)#gamma=10
+  g1=optimize(log_lik4, interval = c(0.001,100), x=x1) # mle estimates
+  g2=optimize(log_lik4, interval = c(0.001,100), x=x2)
+  g3=optimize(log_lik4, interval = c(0.001,100), x=x3)
+  g4=optimize(log_lik4, interval = c(0.001,100), x=x4)
+  gamma_1[i]=g1$minimum
+  gamma_2[i]=g2$minimum
+  gamma_3[i]=g3$minimum
+  gamma_4[i]=g4$minimum
+}
+mse1= 1/n1 *sum((gamma_1-mean(gamma_1))^2)
+mse2= 1/n2 *sum((gamma_2-mean(gamma_2))^2)
+mse3= 1/n1 *sum((gamma_3-mean(gamma_3))^2)
+mse4= 1/n2 *sum((gamma_4-mean(gamma_4))^2)
+mse1 # gamma =1 , n =10
+mse2 # gamma =1 , n =500
+mse3 # gamma =10 , n =10
+mse4 # gamma =10 , n =500
+```
+
+Now we do the posterior mean by markov chain monte carlo:
+```{r pm}
+# unnormalized pi will be : 
+pi_p = function(xvec , gam ){# assuming the same prioir for gamma as in question 1
+  -log_lik4(xvec, gam)  * exp(-gam/10) 
+}
+
+# full conditional : f(gamma| X,mu)
+f_gamma_p = function(xvec , gam ){
+  -log_lik4(xvec,gam) * exp(-gam/10) 
+}
+```
+
+```{r sapl}
+x1= rlogis(n1,3,1) #gamma=1, n=10
+x2=rlogis(n2,3,1)#gamma=1, n=500
+x3=rlogis(n1,3,10) #gamma=10,n=10
+x4=rlogis(n2,3,10)#gamma=10,n=500
+```
+
+```{r sap0l ,warning=FALSE}
+chain_length= 10000
+MH = matrix(NA, chain_length, 2,dimnames = list(NULL,c("index","gamma")))
+MH[1,]= c(1,  2.6)
+proposal = function(gam){
+  rnorm(1,gam,1)
+}
+naccept = 1
+i = 2
+for (i in 2:chain_length){
+  MH[i,1]=i
+  propose = proposal(MH[i-1,2])
+  alpha = min(f_gamma_p(x1,propose)*dnorm(MH[i-1,2],MH[i-1,2],1)/
+                f_gamma_p(x1,MH[i-1,2])/dnorm(propose,MH[i-1,2],1) , 1)
+   if (propose > 0 & is.finite(alpha)& !is.nan(alpha) & runif(1)< alpha){ MH[i,2]= propose }else{MH[i,2]= MH[i-1,2]}
+}
+```
+```{r jioh}
+ 1/chain_length *sum((MH[,2]-mean(MH[,2]))^2) #mse posterior
+  mean(MH[,2])  # posterior estimate
+  par(mfrow=c(1,2))
+  hist(MH[,2],breaks =30, main="Posterior of gamma" ,xlab="gamma")
+  plot(MH[,2], type = "l", xlab="gamma" , main = "Chain values of gamma")
+
+```
+
+```{r sap0000l, warning=FALSE}
+chain_length= 10000
+MH = matrix(NA, chain_length, 2,dimnames = list(NULL,c("index","gamma")))
+MH[1,]= c(1,  2.6)
+proposal = function(gam){
+  rnorm(1,gam,1)
+}
+naccept = 1
+i = 2
+for (i in 2:chain_length){
+  MH[i,1]=i
+  propose = proposal(MH[i-1,2])
+ alpha = min(f_gamma_p(x2,propose)*dnorm(MH[i-1,2],MH[i-1,2],1)/
+                f_gamma_p(x2,MH[i-1,2])/dnorm(propose,MH[i-1,2],1) , 1)
+   if (propose > 0 & is.finite(alpha)& !is.nan(alpha) &runif(1)< alpha){ MH[i,2]= propose }else{MH[i,2]= MH[i-1,2]}
+}
+  1/chain_length *sum((MH[,2]-mean(MH[,2]))^2) #mse posterior
+  mean(MH[,2])  # posterior estimate
+  par(mfrow=c(1,2))
+  hist(MH[,2],breaks =30, main="Posterior of gamma" ,xlab="gamma")
+  plot(MH[,2], type = "l", xlab="gamma" , main = "Chain values of gamma")
+
+```
+
+```{r dsdds, warning=FALSE}
+chain_length= 10000
+MH = matrix(NA, chain_length, 2,dimnames = list(NULL,c("index","gamma")))
+MH[1,]= c(1,  2.6)
+proposal = function(gam){
+  rnorm(1,gam,1)
+}
+naccept = 1
+i = 2
+for (i in 2:chain_length){
+  MH[i,1]=i
+  propose = proposal(MH[i-1,2])
+ alpha = min(f_gamma_p(x3,propose)*dnorm(MH[i-1,2],MH[i-1,2],1)/
+                f_gamma_p(x3,MH[i-1,2])/dnorm(propose,MH[i-1,2],1) , 1)
+   if (propose > 0 & is.finite(alpha)& !is.nan(alpha) &runif(1)< alpha){ MH[i,2]= propose }else{MH[i,2]= MH[i-1,2]}
+}
+```
+```{r oppp}
+  1/chain_length *sum((MH[,2]-mean(MH[,2]))^2) #mse posterior
+  mean(MH[,2])  # posterior estimate
+  par(mfrow=c(1,2))
+  hist(MH[,2],breaks =30, main="Posterior of gamma" ,xlab="gamma")
+  plot(MH[,2], type = "l", xlab="gamma" , main = "Chain values of gamma")
+
+```
+
+```{r sap00l, warning=FALSE}
+chain_length= 10000
+MH = matrix(NA, chain_length, 2,dimnames = list(NULL,c("index","gamma")))
+MH[1,]= c(1,  2.6)
+proposal = function(gam){
+  rnorm(1,gam,1)
+}
+naccept = 1
+i = 2
+for (i in 2:chain_length){
+  MH[i,1]=i
+  propose = proposal(MH[i-1,2])
+  alpha = min(f_gamma_p(x4,propose)*dnorm(MH[i-1,2],MH[i-1,2],1)/
+                f_gamma_p(x4,MH[i-1,2])/dnorm(propose,MH[i-1,2],1) , 1)
+   if (propose > 0 & is.finite(alpha)& !is.nan(alpha) &runif(1)< alpha){ MH[i,2]= propose }else{MH[i,2]= MH[i-1,2]}
+}
+```
+```{r pllp}
+  1/chain_length*sum((MH[,2]-mean(MH[,2]))^2) #mse posterior
+  mean(MH[,2])  # posterior estimate
+  par(mfrow=c(1,2))
+  hist(MH[,2],breaks =30, main="Posterior of gamma" ,xlab="gamma")
+  plot(MH[,2], type = "l", xlab="gamma" , main = "Chain values of gamma")
+
+```
+
